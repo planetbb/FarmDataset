@@ -22,12 +22,22 @@ def load_data(url):
     df = df.dropna(subset=['Yield_Per_sqm_kg', 'Avg_Price_Per_kg_USD'])
     return df
 
-# 실제 데이터를 불러올 때는 이렇게 호출합니다
+# 1. 먼저 데이터를 불러와서 df_crop이라는 이름을 만듭니다.
+# SHEET_URLS["crop"] 부분은 실제 구글 시트 주소 변수명과 일치해야 합니다.
 try:
-    df_crop = load_data(SHEET_URLS["crop"])
+    df_crop = pd.read_csv(SHEET_URLS["crop"])
+
+    # 2. 이름이 만들어진 후(df_crop), 데이터를 청소합니다.
+    df_crop['Yield_Per_sqm_kg'] = pd.to_numeric(df_crop['Yield_Per_sqm_kg'], errors='coerce')
+    df_crop['Avg_Price_Per_kg_USD'] = pd.to_numeric(df_crop['Avg_Price_Per_kg_USD'], errors='coerce')
+
+    # 3. 비정상 데이터 삭제
+    df_crop = df_crop.dropna(subset=['Yield_Per_sqm_kg', 'Avg_Price_Per_kg_USD'])
+    
     st.success(f"✅ {len(df_crop)}개의 유효한 데이터를 불러왔습니다.")
+
 except Exception as e:
-    st.error(f"데이터를 불러오는 중 오류가 발생했습니다: {e}")
+    st.error(f"데이터 로딩 중 오류가 발생했습니다: {e}")
 
 # --- 앱 UI 시작 ---
 st.set_page_config(page_title="AgriTech FarmPlanner", layout="wide")
