@@ -79,6 +79,81 @@ with tab1:
     
     st.info(f"💡 {selected_country} 지역의 {selected_crop} 평균 지표를 바탕으로 산출되었습니다.")
 
+import plotly.graph_objects as go
+
+# --- 수익성 분석 섹션 (예: Tab 1) ---
+with tab1:
+    st.header(f"📊 {selected_crop} 자동화 레벨별 비교 분석")
+    
+    # 데이터 준비: 각 레벨별 요약 정보 계산
+    comparison_data = []
+    
+    for level in [1, 2, 3]:
+        label = ["Manual", "Semi-Auto", "Full-Auto"][level-1]
+        mh_col = f'Auto_{level}_ManHour_per_sqm'
+        eq_col = f'Auto_{level}_Equipment'
+        
+        # 1. 총 노동 시간 계산
+        total_mh = df_process[df_process['Crop_Name'] == selected_crop][mh_col].sum() * size_sqm
+        
+        # 2. 투입 장비 투자비 계산 (Equipment_Facility 시트와 매칭)
+        used_equips = df_process[df_process['Crop_Name'] == selected_crop][eq_col].dropna().unique()
+        # Manual(1단계)에서 장비가 비어있다면 Hand Tool Kit 가격 적용 로직
+        if level == 1 and len(used_equips) == 0:
+            used_equips = ['Hand Tool Kit']
+            
+        total_capex = df_equip[df_equip['Item_Name'].isin(used_equips)]['Price'].sum()
+        
+        comparison_data.append({
+            "Level": label,
+            "Total_ManHour": total_mh,
+            "Total_CAPEX": total_capex
+        })
+
+    # 데이터프레임 변환
+    df_compare = pd.DataFrame(comparison_data)
+
+    # --- 시각화 1: 노동 시간 vs 투자 비용 (이중 축 차트) ---
+    fig = go.Figure()
+
+    # 노동 시간 (Bar)
+    fig.add_trace(go.Bar(
+        x=df_compare['Level'],
+        y=df_compare['Total_ManHour'],
+        name='Total Man-Hours (Lower is better)',
+        marker_color='skyblue',
+        yaxis='y1'
+    ))
+
+    # 투자 비용 (Line)
+    fig.add_trace(go.Scatter(
+        x=df_compare['Level'],
+        y=df_compare['Total_CAPEX'],
+        name='Investment Cost (CAPEX)',
+        line=dict(color='firebrick', width=4),
+        yaxis='y2'
+    ))
+
+    fig.update_layout(
+        title=f"Efficiency vs Investment: {selected_crop}",
+        xaxis=dict(title="Automation Level"),
+        yaxis=dict(title="Man-Hours", side="left"),
+        yaxis2=dict(title="Investment ($)", side="right", overlaying="y", showgrid=False),
+        legend=dict(x=0.1, y=1.1, orientation="h")
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # --- 시각화 2: 요약 지표 (Metrics) ---
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.metric("Manual 노동량", f"{df_compare.iloc[0]['Total_ManHour']:,.0f} hr")
+    with c2:
+        reduction = (1 - df_compare.iloc[2]['Total_ManHour'] / df_compare.iloc[0]['Total_ManHour']) * 100
+        st.metric("Full-Auto 전환 시 노동 절감률", f"{reduction:.1f}%", delta=f"-{reduction:.1f}%")
+    with c3:
+        st.metric("Full-Auto 투자비", f"${df_compare.iloc[2]['Total_CAPEX']:,.0f}")
+        
 # --- Tab 2: 작업 스케줄 (FarmScheduler) ---
 with tab2:
     st.subheader(f"📅 {selected_crop} 연간 공정 스케줄")
