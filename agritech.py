@@ -142,16 +142,47 @@ with tab1:
         st.plotly_chart(fig, use_container_width=True)
 
         # --- 요약 지표 ---
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("Manual 노동량", f"{df_compare.iloc[0]['Total_ManHour']:,.0f} hr")
-        with c2:
-            m_val = df_compare.iloc[0]['Total_ManHour']
-            f_val = df_compare.iloc[2]['Total_ManHour']
-            reduction = (1 - f_val / m_val) * 100 if m_val > 0 else 0
-            st.metric("Full-Auto 노동 절감", f"{reduction:.1f}%", delta=f"-{reduction:.1f}%")
-        with c3:
-            st.metric("Full-Auto 설비투자비", f"${df_compare.iloc[2]['Total_CAPEX']:,.16g}")
+# --- 상세 데이터 테이블 섹션 ---
+        st.markdown("---")
+        st.subheader(f"📋 {selected_crop} 상세 분석 데이터 ({automation_level})")
+
+        # 1. 현재 선택된 레벨의 데이터만 추출
+        level_map = {"Manual": 0, "Semi-Auto": 1, "Full-Auto": 2}
+        idx = level_map[automation_level]
+        current_data = df_compare.iloc[idx]
+        
+        # 2. 현재 레벨에서 사용된 장비 목록 가져오기
+        level_num = idx + 1
+        eq_col = f'Auto_{level_num}_Equipment'
+        used_equips = crop_schedule[eq_col].dropna().unique().tolist()
+        
+        if level_num == 1 and not used_equips:
+            used_equips = ['Hand Tool Kit']
+
+        # 3. 분석 결과 표 구성
+        analysis_table = {
+            "항목 (Metrics)": [
+                "자동화 수준 (Level)",
+                "총 노동 시간 (Total Man-Hours)",
+                "총 설비투자비 (Total CAPEX)",
+                "투입 장비 리스트 (Equipment List)"
+            ],
+            "상세 내용 (Value)": [
+                automation_level,
+                f"{current_data['Total_ManHour']:,.1f} 시간",
+                f"$ {current_data['Total_CAPEX']:,.0f}",
+                ", ".join(used_equips) if used_equips else "없음"
+            ]
+        }
+
+        # 데이터프레임으로 변환하여 출력
+        df_analysis = pd.DataFrame(analysis_table)
+        st.table(df_analysis) # 또는 st.dataframe(df_analysis, use_container_width=True)
+
+        # 4. 추가 팁: 투자 효율성 지수 (간이)
+        if current_data['Total_CAPEX'] > 0:
+            efficiency = current_data['Total_ManHour'] / (current_data['Total_CAPEX'] / 1000)
+            st.info(f"💡 **분석 결과:** {automation_level} 단계에서는 $1,000 투자당 연간 약 **{efficiency:.2f} 시간**의 노동력을 절감하는 효과가 있습니다.")
             
     else:
         st.info("해당 작물의 공정 데이터를 입력하면 분석 차트가 표시됩니다.")
