@@ -4,7 +4,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 
 # 1. 페이지 설정
-st.set_page_config(page_title="Farm Automation Simulator by Jinux", layout="wide")
+st.set_page_config(page_title="Farm Automation Planner by Jinux", layout="wide")
 
 # 2. 데이터 로딩 및 전처리 함수
 @st.cache_data
@@ -70,22 +70,24 @@ if display_df.empty:
     display_df = df_process[df_process['Crop_Name'] == rep]
     source_name = f"{rep} (Representative)"
 
-# --- 5. 메인 레이아웃 상단 ---
+# --- 5. 메인 레이아웃 상단 (Farm Automation Planner) ---
 h1, h2 = st.columns([1, 8])
 h1.markdown("<h1 style='font-size: 60px; margin: 0;'>🚜</h1>", unsafe_allow_html=True)
-h2.title("Farm Automation Simulator")
+h2.title("Farm Automation Planner")
 h2.markdown(f"<p style='margin-top:-15px;'>by <b>Jinux</b></p>", unsafe_allow_html=True)
 
 # --- 6. 메인 탭 구성 ---
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Profitability", "📅 Schedule", "🚜 Equipment", "🗂️ Master Data"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Profitability (수익성 분석)", "📅 Schedule (일정)", "🚜 Equipment (설비)", "🗂️ Master Data (데이터 보기)"])
 
 with tab1:
     total_yield = size_sqm * crop_info['Yield_Per_sqm_kg']
     total_rev = total_yield * crop_info['Avg_Price_Per_kg_USD']
+    
+    # 지표명 영문/국문 병기 수정
     m1, m2, m3 = st.columns(3)
-    m1.metric("🌾 예상 수확량", f"{total_yield:,.1f} kg")
-    m2.metric("💰 예상 매출액", f"$ {total_rev:,.0f}")
-    m3.metric("📍 설정 면적", f"{size_sqm:,.0f} sqm")
+    m1.metric("🌾 Est. Harvest (예상수확량)", f"{total_yield:,.1f} kg")
+    m2.metric("💰 Est. Revenue (예상매출액)", f"$ {total_rev:,.0f}")
+    m3.metric("📍 Farm Size (설정면적)", f"{size_sqm:,.0f} sqm")
     
     comp_data = []
     for i, label in enumerate(["Manual", "Semi-Auto", "Full-Auto"]):
@@ -111,7 +113,6 @@ with tab1:
             is_sel = (row['Level'] == automation_level)
             st.markdown(f"<div style='border:1px solid #ddd; padding:10px; border-radius:8px; margin-bottom:6px; background-color:{'#FFF9C4' if is_sel else '#FFF'}; color:#000;'><b>{row['Level']}</b> {'⭐' if is_sel else ''}<br><span style='font-size:0.9em;'>⏱️ {row['MH']:,.1f}h | 💰 ${row['CAPEX']:,.0f}</span></div>", unsafe_allow_html=True)
 
-        # --- [추가] 자동화 레벨 분석 인사이트 문구 ---
         st.markdown("<br>", unsafe_allow_html=True)
         manual_row = df_comp[df_comp['Level'] == "Manual"].iloc[0]
         current_row = df_comp[df_comp['Level'] == automation_level].iloc[0]
@@ -119,14 +120,10 @@ with tab1:
         if automation_level != "Manual":
             reduction = (1 - current_row['MH'] / manual_row['MH']) * 100 if manual_row['MH'] > 0 else 0
             extra_capex = current_row['CAPEX'] - manual_row['CAPEX']
-            
-            st.success(f"""
-                **💡 분석 결과:** {automation_level} 적용 시 수동(Manual) 대비 노동 시간은 **{reduction:.1f}% 절감**되며, 
-                설비 투자비는 약 **$ {extra_capex:,.0f} 가 추가**될 것으로 예상됩니다.
-            """)
+            st.success(f"**💡 분석 결과:** {automation_level} 적용 시 수동 대비 노동 시간 **{reduction:.1f}% 절감**, 설비 투자비 **$ {extra_capex:,.0f} 추가**가 예상됩니다.")
         else:
-            st.info("💡 **Manual 상태입니다.** 상단 수준을 변경하여 자동화 효율을 확인하세요.")
-            
+            st.info("💡 **Manual 상태입니다.** 수준을 변경하여 자동화 효율을 확인하세요.")
+
 with tab2:
     st.subheader(f"📅 {selected_crop} Schedule ({source_name})")
     cols = [c for c in ['Process_Step', 'Work_Week_Start', 'Work_Week_End', f'Auto_{auto_idx}_Equipment'] if c in display_df.columns]
@@ -141,21 +138,15 @@ with tab3:
 
 with tab4:
     st.subheader("🗂️ Master Database")
-    # 버튼 좌측 정렬
     c1, c2, c3, _ = st.columns([1, 1, 1, 5])
     if 'db_view' not in st.session_state: st.session_state.db_view = "Crop"
-    
     if c1.button("🌾 Crop", use_container_width=True): st.session_state.db_view = "Crop"
     if c2.button("📅 Process", use_container_width=True): st.session_state.db_view = "Process"
     if c3.button("🚜 Equipment", use_container_width=True): st.session_state.db_view = "Equip"
-    
     st.divider()
-    if st.session_state.db_view == "Crop":
-        st.dataframe(df_crop, use_container_width=True, hide_index=True)
-    elif st.session_state.db_view == "Process":
-        st.dataframe(df_process, use_container_width=True, hide_index=True)
-    elif st.session_state.db_view == "Equip":
-        st.dataframe(df_equip, use_container_width=True, hide_index=True)
+    if st.session_state.db_view == "Crop": st.dataframe(df_crop, use_container_width=True, hide_index=True)
+    elif st.session_state.db_view == "Process": st.dataframe(df_process, use_container_width=True, hide_index=True)
+    elif st.session_state.db_view == "Equip": st.dataframe(df_equip, use_container_width=True, hide_index=True)
 
 # --- 7. 하단 푸터 (한 줄 우측 정렬) ---
 st.markdown("<br><br>", unsafe_allow_html=True)
