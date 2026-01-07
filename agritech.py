@@ -179,7 +179,33 @@ with tab3:
 
 # --- Tab 4: 마스터 데이터 ---
 with tab4:
-    c1, c2, c3 = st.columns(3)
-    if c1.button("작물 데이터"): st.dataframe(df_crop)
-    if c2.button("공정 데이터"): st.dataframe(df_process)
-    if c3.button("장비 데이터"): st.dataframe(df_equip)
+    st.subheader("🗂️ 데이터베이스 조회")
+    
+    # 1. 버튼들을 좌측 정렬하기 위해 컬럼 배치 (작은 너비로 설정)
+    col1, col2, col3, _ = st.columns([1, 1, 1, 5]) # 마지막 빈 컬럼(_)이 나머지 공간을 차지하여 좌측 정렬됨
+    
+    # 2. 버튼 클릭 상태를 저장하기 위해 session_state 활용 (디폴트값: 작물)
+    if 'db_view' not in st.session_state:
+        st.session_state.db_view = "작물"
+
+    if col1.button("🌾 작물 데이터"):
+        st.session_state.db_view = "작물"
+    if col2.button("📅 공정 데이터"):
+        st.session_state.db_view = "공정"
+    if col3.button("🚜 장비 데이터"):
+        st.session_state.db_view = "장비"
+
+    st.markdown("---")
+
+    # 3. 선택된 데이터프레임 디스플레이
+    if st.session_state.db_view == "작물":
+        st.write("#### 🌾 Crop Master Data")
+        st.dataframe(df_crop, use_container_width=True, hide_index=True)
+        
+    elif st.session_state.db_view == "공정":
+        st.write("#### 📅 Process Standard Data")
+        st.dataframe(df_process, use_container_width=True, hide_index=True)
+        
+    elif st.session_state.db_view == "장비":
+        st.write("#### 🚜 Equipment & Facility Data")
+        st.dataframe(df_equip, use_container_width=True, hide_index=True)
