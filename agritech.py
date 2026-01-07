@@ -85,3 +85,9 @@ with tab1:
                     p_col = 'Unit_Price_USD' 
                     name_col = 'Item_Name'
                     if p_col in df_equip.columns and name_col in df_equip.columns:
+                        # [이 줄의 들여쓰기를 확인하세요! 앞선 if보다 4칸 더 들어가야 합니다]
+                        prices = pd.to_numeric(df_equip[df_equip[name_col].isin(used_equips)][p_col], errors='coerce')
+                        total_capex = prices.sum()
+                    else:
+                        # 컬럼이 없을 경우 처리
+                        total_capex = 0
