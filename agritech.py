@@ -1,9 +1,19 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import datetime
 
 # 1. 페이지 설정
-st.set_page_config(page_title="AgriTech FarmPlanner", layout="wide")
+st.set_page_config(page_title="Farm Automation Simulator by Jinux", layout="wide")
+
+# --- [추가] 메인 상단 제목 및 로고 ---
+header_col1, header_col2 = st.columns([1, 8])
+with header_col1:
+    # 로고: 이모지 대신 이미지 URL이 있다면 "https://..." 를 넣으시면 됩니다.
+    st.markdown("<h1 style='font-size: 70px; margin: 0;'>🚜</h1>", unsafe_allow_html=True)
+with header_col2:
+    st.title("Farm Automation Simulator")
+    st.markdown("<p style='font-size: 1.2em; color: #555; margin-top: -15px;'>by <b>Jinux</b></p>", unsafe_allow_html=True)
 
 # 2. 구글 시트 URL 설정
 SHEET_URLS = {
@@ -209,3 +219,27 @@ with tab4:
     elif st.session_state.db_view == "장비":
         st.write("#### 🚜 Equipment & Facility Data")
         st.dataframe(df_equip, use_container_width=True, hide_index=True)
+
+# --- [추가] 페이지 하단 푸터 (Footer) ---
+st.markdown("<br><br>", unsafe_allow_html=True)
+st.divider()
+f_col1, f_col2, f_col3 = st.columns([2, 2, 1])
+
+with f_col1:
+    st.markdown(f"**Copyright 2024. Jinux. All rights reserved.**")
+    st.caption("Designed for AgriTech Efficiency Analysis")
+
+with f_col2:
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    st.markdown(f"📅 **최신 업데이트:** {current_date}")
+
+with f_col3:
+    st.markdown(f"📧 **Contact:** [JinuxDreams@gmail.com](mailto:JinuxDreams@gmail.com)")
+
+# CSS를 활용한 하단 텍스트 중앙 정렬 스타일링 (선택사항)
+st.markdown("""
+    <style>
+    footer {visibility: hidden;}
+    .reportview-container .main .footer {color: #888;}
+    </style>
+    """, unsafe_allow_html=True)
