@@ -81,17 +81,20 @@ if display_process_df.empty:
 # 탭 구성
 tab1, tab2, tab3, tab4 = st.tabs(["📊 수익성 분석", "📅 작업 스케줄", "🚜 투입 장비", "🗂️ 마스터 데이터"])
 
-# --- Tab 1: 수익성 분석 ---
+# --- Tab 1: 수익성 분석 (인사이트 로직 복구 버전) ---
 with tab1:
     total_yield = size_sqm * crop_info['Yield_Per_sqm_kg']
     total_rev = total_yield * crop_info['Avg_Price_Per_kg_USD']
     st.markdown(f"### 📊 {selected_crop} 분석 리포트")
+    
+    # 상단 지표
     m1, m2, m3 = st.columns(3)
     m1.metric("🌾 예상 수확량", f"{total_yield:,.1f} kg")
     m2.metric("💰 예상 매출액", f"$ {total_rev:,.0f}")
     m3.metric("📍 설정 면적", f"{size_sqm:,.0f} sqm")
     st.markdown("---")
     
+    # 레벨별 데이터 계산
     comp_data = []
     for i, label in enumerate(["Manual", "Semi-Auto", "Full-Auto"]):
         num = i + 1
@@ -102,6 +105,8 @@ with tab1:
         comp_data.append({"Level": label, "MH": mh_val, "CAPEX": capex, "EQ": ", ".join(eq_list)})
     
     df_comp = pd.DataFrame(comp_data)
+    
+    # 차트와 카드 레이아웃
     c1, c2 = st.columns([1, 1])
     with c1:
         fig = go.Figure()
@@ -115,6 +120,32 @@ with tab1:
             st.markdown(f"""<div style="border: 1px solid {'#2E86C1' if sel else '#DDD'}; padding: 10px; border-radius: 5px; margin-bottom: 5px; background: {'#F0F7FF' if sel else '#FFF'}; color: #000;">
             <b>{r['Level']}</b> | ⏱️ {r['MH']:,.1f}h | 💰 ${r['CAPEX']:,.0f}<br><small>🚜 {r['EQ']}</small></div>""", unsafe_allow_html=True)
 
+    # ==========================================
+    # 🚀 복구된 성과 분석 인사이트 (수익성 분석 하단)
+    # ==========================================
+    st.markdown("---")
+    if automation_level != "Manual":
+        # 수동(Manual) 대비 현재 선택된 레벨 비교
+        manual_data = df_comp.iloc[0]
+        current_data = df_comp[df_comp['Level'] == automation_level].iloc[0]
+        
+        m_mh = manual_data['MH']
+        c_mh = current_data['MH']
+        extra_capex = current_data['CAPEX'] - manual_data['CAPEX']
+        
+        if m_mh > 0:
+            reduction_pct = (1 - c_mh / m_mh) * 100
+            saved_hours = m_mh - c_mh
+            
+            st.success(f"### 💡 {automation_level} 도입 성과 분석")
+            col_a, col_b = st.columns(2)
+            col_a.info(f"**⏱️ 노동시간 변화**\n\n수동 대비 **{reduction_pct:.1f}%** 절감\n(연간 {saved_hours:,.1f} 시간 단축)")
+            col_b.warning(f"**💰 설비투자금 변화**\n\n수동 대비 **$ {extra_capex:,.0f}** 추가 투자\n(초기 자본 지출 증가)")
+            
+            st.caption(f"※ 위 분석은 {source_name}의 공정 데이터를 기반으로 산출되었습니다.")
+    else:
+        
+        st.info("💡 **Manual 모드 사용 중:** 상단 차트를 확인하여 Semi-Auto 또는 Full-Auto 도입 시의 노동 절감 효과를 확인해 보세요.")
 # --- Tab 2: 작업 스케줄 ---
 with tab2:
     st.subheader(f"📅 {selected_crop} 작업 프로세스")
