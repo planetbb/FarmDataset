@@ -81,61 +81,55 @@ with tab1:
 
 # --- Tab 2: 작업 스케줄 (FarmScheduler) ---
 with tab2:
-    st.subheader(f"📅 {selected_crop} 연간 공정 스케줄 ({auto_label})")
-    
-    # 해당 작물의 공정 데이터 필터링
-    crop_schedule = df_process[df_process['Crop_Name'] == selected_crop].copy() # .copy()를 써야 데이터 수정 시 경고가 안 납니다.
+    st.subheader(f"📅 {selected_crop} 연간 공정 스케줄")
+    crop_schedule = df_process[df_process['Crop_Name'] == selected_crop].copy()
     
     if not crop_schedule.empty:
-        # 1. 자동화 레벨 1(Manual)일 때 'Hand Tool Kit' 자동 매칭
+        # 시간 중심 컬럼만 노출
+        show_cols = ['Category_Type', 'Process_Step', 'Work_Week_Start', 'Work_Week_End']
+        
+        # 장비명은 '참고용'으로만 노출
         equip_col = f'Auto_{auto_level}_Equipment'
-        mh_col = f'Auto_{auto_level}_ManHour_per_sqm'
-        
         if auto_level == 1:
-            # 시트에 컬럼이 없거나 비어있으면 'Hand Tool Kit'으로 채움
-            if equip_col not in crop_schedule.columns:
-                crop_schedule[equip_col] = "Hand Tool Kit"
-            crop_schedule[equip_col] = crop_schedule[equip_col].fillna("Hand Tool Kit")
-
-        # 2. 출력할 컬럼 리스트 구성 (Category_Type 포함)
-        # 시트에 있는 실제 컬럼명과 일치하는지 확인하며 구성합니다.
-        base_cols = ['Category_Type', 'Process_Step', 'Work_Week_Start', 'Work_Week_End']
-        show_cols = [c for c in base_cols if c in crop_schedule.columns]
+            crop_schedule[equip_col] = crop_schedule.get(equip_col, pd.Series()).fillna("Hand Tool Kit")
         
-        # 장비 컬럼 추가 (2번째 위치)
         if equip_col in crop_schedule.columns:
-            show_cols.insert(1, equip_col)
-        
-        # 노동시간 컬럼 추가
-        if mh_col in crop_schedule.columns:
-            show_cols.append(mh_col)
-        
-        # 3. 데이터프레임 출력
+            show_cols.append(equip_col)
+            
         st.dataframe(crop_schedule[show_cols], use_container_width=True, hide_index=True)
-        
-        # 4. 총 노동 시간 계산 (데이터가 있는 경우에만)
-        if mh_col in crop_schedule.columns:
-            total_h = crop_schedule[mh_col].sum() * size_sqm
-            st.warning(f"⚠️ {auto_label} 적용 시, 연간 총 예상 노동시간: **{total_h:,.1f} Man-Hour**")
-        
-    else:
-        st.error(f"'{selected_crop}'의 공정(Process) 데이터가 없습니다. 시트의 Crop_Name 일치 여부를 확인해주세요.")
 
-# --- Tab 3: 투입 장비 상세 ---
+# --- Tab 3: 투입 장비 정보 (Equipment Info) ---
 with tab3:
-    st.subheader(f"🚜 {auto_label} 단계 필수 장비/시설")
-    if auto_level > 1:
-        # 스케줄에 포함된 장비 이름 추출
-        equip_names = crop_schedule[f'Auto_{auto_level}_Equipment'].unique()
-        matched = df_equip[df_equip['Item_Name'].isin(equip_names)]
+    st.subheader(f"🚜 {auto_label} 주요 투입 장비 명세")
+    
+    # 1. 현재 공정에서 사용되는 장비 리스트 추출
+    equip_col = f'Auto_{auto_level}_Equipment'
+    if equip_col in crop_schedule.columns:
+        # 중복 제거된 장비 목록 (예: ['Tractor', 'Hand Tool Kit'])
+        used_equipments = crop_schedule[equip_col].dropna().unique()
         
-        if not matched.empty:
-            st.write("선택하신 자동화 수준에서 운용되는 장비 상세 명세입니다.")
-            st.table(matched[['Item_Name', 'Unit_Price_USD', 'Operating_Cost_Hour_USD', 'Lifespan_Years']])
+        if len(used_equipments) > 0:
+            # 2. Equipment_Facility 시트에서 해당 장비들 정보만 필터링
+            # df_equip는 Equipment_Facility 시트 데이터를 담고 있는 데이터프레임입니다.
+            matched_equip = df_equip[df_equip['Item_Name'].isin(used_equipments)]
+            
+            if not matched_equip.empty:
+                # 3. 상세 정보 출력 (항목명, 제조사, 가격, 사양 등)
+                st.dataframe(matched_equip, use_container_width=True, hide_index=True)
+                
+                # 4. (선택 사항) 장비별 이미지나 상세 설명 카드로 보여주기
+                for _, row in matched_equip.iterrows():
+                    with st.expander(f"🔍 {row['Item_Name']} 상세 보기"):
+                        col1, col2 = st.columns([1, 2])
+                        with col1:
+                            st.write(f"**제조사:** {row.get('Manufacturer', 'N/A')}")
+                            st.write(f"**추정가격:** ${row.get('Price', 0):,.0f}")
+                        with col2:
+                            st.write(f"**주요사양:** {row.get('Specification', 'N/A')}")
+            else:
+                st.info("선택된 공정 장비의 상세 스펙 정보가 장비 마스터 시트에 없습니다.")
         else:
-            st.info("현재 선택된 공정에 매칭된 장비 마스터 정보가 없습니다.")
-    else:
-        st.write("Manual 단계는 별도의 대형 자동화 장비를 사용하지 않습니다.")
+            st.info("이 공정에는 등록된 장비가 없습니다.")
 
 # --- Tab 4: 마스터 데이터 ---
 with tab4:
