@@ -65,22 +65,6 @@ tab1, tab2, tab3, tab4 = st.tabs(["📊 수익성 분석", "📅 작업 스케�
 # 선택된 작물의 상세 데이터 추출
 crop_data = df_crop[df_crop['Crop_Name'] == selected_crop].iloc[0]
 
-# --- Tab 1: 수익성 분석 (FarmPlanner) ---
-with tab1:
-    st.subheader(f"📊 {selected_crop} 재배 수익 시뮬레이션")
-    col1, col2, col3 = st.columns(3)
-    
-    revenue = crop_data['Yield_Per_sqm_kg'] * size_sqm * crop_data['Avg_Price_Per_kg_USD']
-    total_yield = crop_data['Yield_Per_sqm_kg'] * size_sqm
-    
-    col1.metric("예상 총 매출", f"${revenue:,.0f}")
-    col2.metric("예상 총 수확량", f"{total_yield:,.0f} kg")
-    col3.metric("재배 카테고리", crop_data['Category_Type'])
-    
-    st.info(f"💡 {selected_country} 지역의 {selected_crop} 평균 지표를 바탕으로 산출되었습니다.")
-
-import plotly.graph_objects as go
-
 # --- 수익성 분석 섹션 (예: Tab 1) ---
 with tab1:
     st.header(f"📊 {selected_crop} 자동화 레벨별 비교 분석")
@@ -88,71 +72,90 @@ with tab1:
     # 데이터 준비: 각 레벨별 요약 정보 계산
     comparison_data = []
     
-    for level in [1, 2, 3]:
-        label = ["Manual", "Semi-Auto", "Full-Auto"][level-1]
-        mh_col = f'Auto_{level}_ManHour_per_sqm'
-        eq_col = f'Auto_{level}_Equipment'
-        
-        # 1. 총 노동 시간 계산
-        total_mh = df_process[df_process['Crop_Name'] == selected_crop][mh_col].sum() * size_sqm
-        
-        # 2. 투입 장비 투자비 계산 (Equipment_Facility 시트와 매칭)
-        used_equips = df_process[df_process['Crop_Name'] == selected_crop][eq_col].dropna().unique()
-        # Manual(1단계)에서 장비가 비어있다면 Hand Tool Kit 가격 적용 로직
-        if level == 1 and len(used_equips) == 0:
-            used_equips = ['Hand Tool Kit']
+    # 해당 작물의 공정 데이터만 먼저 필터링
+    crop_schedule = df_process[df_process['Crop_Name'] == selected_crop]
+    
+    if not crop_schedule.empty:
+        for level in [1, 2, 3]:
+            label = ["Manual", "Semi-Auto", "Full-Auto"][level-1]
+            mh_col = f'Auto_{level}_ManHour_per_sqm'
+            eq_col = f'Auto_{level}_Equipment'
             
-        total_capex = df_equip[df_equip['Item_Name'].isin(used_equips)]['Price'].sum()
-        
-        comparison_data.append({
-            "Level": label,
-            "Total_ManHour": total_mh,
-            "Total_CAPEX": total_capex
-        })
+            # 1. 총 노동 시간 계산 (컬럼 유무 확인 후 안전하게 계산)
+            if mh_col in crop_schedule.columns:
+                total_mh = crop_schedule[mh_col].sum() * size_sqm
+            else:
+                total_mh = 0
+            
+            # 2. 투입 장비 투자비 계산
+            total_capex = 0
+            if eq_col in crop_schedule.columns:
+                # 해당 레벨의 장비 리스트 추출 (결측치 제거)
+                used_equips = crop_schedule[eq_col].dropna().unique()
+                
+                # Manual(1단계)에서 장비가 비어있다면 Hand Tool Kit 적용
+                if level == 1 and len(used_equips) == 0:
+                    used_equips = ['Hand Tool Kit']
+                
+                # 장비 가격 합산 (df_equip에 해당 장비명이 있을 때만)
+                if not df_equip.empty and 'Item_Name' in df_equip.columns:
+                    total_capex = df_equip[df_equip['Item_Name'].isin(used_equips)]['Price'].sum()
+            
+            comparison_data.append({
+                "Level": label,
+                "Total_ManHour": total_mh,
+                "Total_CAPEX": total_capex
+            })
 
-    # 데이터프레임 변환
-    df_compare = pd.DataFrame(comparison_data)
+        # 데이터프레임 변환
+        df_compare = pd.DataFrame(comparison_data)
 
-    # --- 시각화 1: 노동 시간 vs 투자 비용 (이중 축 차트) ---
-    fig = go.Figure()
+        # --- 시각화 1: 노동 시간 vs 투자 비용 (이중 축 차트) ---
+        fig = go.Figure()
 
-    # 노동 시간 (Bar)
-    fig.add_trace(go.Bar(
-        x=df_compare['Level'],
-        y=df_compare['Total_ManHour'],
-        name='Total Man-Hours (Lower is better)',
-        marker_color='skyblue',
-        yaxis='y1'
-    ))
+        # 노동 시간 (Bar)
+        fig.add_trace(go.Bar(
+            x=df_compare['Level'],
+            y=df_compare['Total_ManHour'],
+            name='Total Man-Hours',
+            marker_color='skyblue',
+            yaxis='y1'
+        ))
 
-    # 투자 비용 (Line)
-    fig.add_trace(go.Scatter(
-        x=df_compare['Level'],
-        y=df_compare['Total_CAPEX'],
-        name='Investment Cost (CAPEX)',
-        line=dict(color='firebrick', width=4),
-        yaxis='y2'
-    ))
+        # 투자 비용 (Line)
+        fig.add_trace(go.Scatter(
+            x=df_compare['Level'],
+            y=df_compare['Total_CAPEX'],
+            name='Investment Cost (CAPEX)',
+            line=dict(color='firebrick', width=4),
+            yaxis='y2'
+        ))
 
-    fig.update_layout(
-        title=f"Efficiency vs Investment: {selected_crop}",
-        xaxis=dict(title="Automation Level"),
-        yaxis=dict(title="Man-Hours", side="left"),
-        yaxis2=dict(title="Investment ($)", side="right", overlaying="y", showgrid=False),
-        legend=dict(x=0.1, y=1.1, orientation="h")
-    )
+        fig.update_layout(
+            title=f"Efficiency vs Investment: {selected_crop}",
+            xaxis=dict(title="Automation Level"),
+            yaxis=dict(title="Man-Hours", side="left", showgrid=True),
+            yaxis2=dict(title="Investment ($)", side="right", overlaying="y", showgrid=False),
+            legend=dict(x=0.01, y=1.15, orientation="h"),
+            margin=dict(l=40, r=40, t=80, b=40)
+        )
 
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-    # --- 시각화 2: 요약 지표 (Metrics) ---
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.metric("Manual 노동량", f"{df_compare.iloc[0]['Total_ManHour']:,.0f} hr")
-    with c2:
-        reduction = (1 - df_compare.iloc[2]['Total_ManHour'] / df_compare.iloc[0]['Total_ManHour']) * 100
-        st.metric("Full-Auto 전환 시 노동 절감률", f"{reduction:.1f}%", delta=f"-{reduction:.1f}%")
-    with c3:
-        st.metric("Full-Auto 투자비", f"${df_compare.iloc[2]['Total_CAPEX']:,.0f}")
+        # --- 시각화 2: 요약 지표 (Metrics) ---
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Manual 노동량", f"{df_compare.iloc[0]['Total_ManHour']:,.0f} hr")
+        with c2:
+            # 분모가 0이 되는 경우 방지
+            m_val = df_compare.iloc[0]['Total_ManHour']
+            f_val = df_compare.iloc[2]['Total_ManHour']
+            reduction = (1 - f_val / m_val) * 100 if m_val > 0 else 0
+            st.metric("Full-Auto 전환 시 노동 절감률", f"{reduction:.1f}%", delta=f"-{reduction:.1f}%")
+        with c3:
+            st.metric("Full-Auto 투자비", f"${df_compare.iloc[2]['Total_CAPEX']:,.0f}")
+    else:
+        st.error(f"'{selected_crop}'에 대한 공정 데이터가 없습니다. 시트를 확인해주세요.")
         
 # --- Tab 2: 작업 스케줄 (FarmScheduler) ---
 with tab2:
