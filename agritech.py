@@ -6,15 +6,6 @@ from datetime import datetime
 # 1. 페이지 설정
 st.set_page_config(page_title="Farm Automation Simulator by Jinux", layout="wide")
 
-# --- [추가] 메인 상단 제목 및 로고 ---
-header_col1, header_col2 = st.columns([1, 8])
-with header_col1:
-    # 로고: 이모지 대신 이미지 URL이 있다면 "https://..." 를 넣으시면 됩니다.
-    st.markdown("<h1 style='font-size: 70px; margin: 0;'>🚜</h1>", unsafe_allow_html=True)
-with header_col2:
-    st.title("Farm Automation Simulator")
-    st.markdown("<p style='font-size: 1.2em; color: #555; margin-top: -15px;'>by <b>Jinux</b></p>", unsafe_allow_html=True)
-
 # 2. 구글 시트 URL 설정
 SHEET_URLS = {
     "crop": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSBlhAdJB-jJOr_MoBgELY-qNKC5yJcD-G2gL03WRVTdbfOqtdiq0jHOnA-UlPakXWjpOw8PeMUroLG/pub?gid=0&single=true&output=csv",
@@ -22,15 +13,13 @@ SHEET_URLS = {
     "process": "https://docs.google.com/spreadsheets/d/e/2PACX-1vSBlhAdJB-jJOr_MoBgELY-qNKC5yJcD-G2gL03WRVTdbfOqtdiq0jHOnA-UlPakXWjpOw8PeMUroLG/pub?gid=1120300035&single=true&output=csv"
 }
 
-# 3. 데이터 로딩 및 전처리
+# 3. 데이터 로딩 함수
 @st.cache_data
 def load_data(url, data_type="crop"):
     try:
         df = pd.read_csv(url)
         df.columns = df.columns.str.strip()
-        # 모든 텍스트 데이터의 앞뒤 공백 제거
         df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-
         if data_type == "crop":
             for c in ['Yield_Per_sqm_kg', 'Avg_Price_Per_kg_USD']:
                 if c in df.columns: 
@@ -39,58 +28,36 @@ def load_data(url, data_type="crop"):
         elif data_type == "process":
             for i in range(1, 4):
                 col = f'Auto_{i}_ManHour_per_sqm'
-                if col in df.columns: 
-                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+                if col in df.columns: df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         elif data_type == "equipment":
             if 'Unit_Price_USD' in df.columns: 
                 df['Unit_Price_USD'] = df['Unit_Price_USD'].astype(str).str.replace(r'[$,]', '', regex=True)
                 df['Unit_Price_USD'] = pd.to_numeric(df['Unit_Price_USD'], errors='coerce').fillna(0)
-            if 'Lifespan_Years' in df.columns: 
-                df['Lifespan_Years'] = pd.to_numeric(df['Lifespan_Years'], errors='coerce').fillna(1)
         return df
-    except Exception as e:
-        st.error(f"데이터 로드 실패: {e}")
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 df_crop = load_data(SHEET_URLS["crop"], "crop")
 df_equip = load_data(SHEET_URLS["equipment"], "equipment")
 df_process = load_data(SHEET_URLS["process"], "process")
 
-if df_crop.empty or df_equip.empty or df_process.empty:
-    st.stop()
+if df_crop.empty: st.stop()
 
-REPRESENTATIVE_CROP = {"Greenhouse": "Strawberry", "Orchard": "Apple", "Paddy": "Rice", "Upland": "Potato"}
-
-# --- 사이드바 설정 ---
+# --- 4. 사이드바 (변수 정의) ---
 with st.sidebar:
-    # 1. 최상단 강조 공지 (깜빡이는 애니메이션 효과)
     st.markdown("""
         <div style="text-align: center; background-color: #f0f2f6; padding: 15px; border-radius: 10px; border: 1px solid #3498db;">
-            <p style="font-size: 1.1em; font-weight: bold; color: #2c3e50; margin-bottom: 5px;">
-                Please select below
-            </p>
-            <p style="font-size: 28px; animation: blink 1s linear infinite; color: #3498db; margin: 0;">
-                ⬇️
-            </p>
+            <p style="font-size: 1.1em; font-weight: bold; color: #2c3e50; margin-bottom: 5px;">Please select below</p>
+            <p style="font-size: 28px; animation: blink 1s linear infinite; color: #3498db; margin: 0;">⬇️</p>
         </div>
-        <style>
-            @keyframes blink {
-                0% { opacity: 1; }
-                50% { opacity: 0.1; }
-                100% { opacity: 1; }
-            }
-        </style>
+        <style> @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.1; } 100% { opacity: 1; } } </style>
     """, unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
-
-    # 2. 선택 항목 (영문 명칭으로 변경)
-    available_countries = df_crop['Country'].unique() if 'Country' in df_crop.columns else []
-    selected_country = st.selectbox("Country (국가)", available_countries)
+    countries = df_crop['Country'].unique()
+    selected_country = st.selectbox("Country (국가)", countries)
     
-    country_crops = df_crop[df_crop['Country'] == selected_country]
-    selected_crop = st.selectbox("Crop (작물)", country_crops['Crop_Name'].unique())
-    
+    crops = df_crop[df_crop['Country'] == selected_country]['Crop_Name'].unique()
+    selected_crop = st.selectbox("Crop (작물)", crops)
     size_sqm = st.number_input("Farm Size (농지 규모, sqm)", min_value=10, value=1000, step=100)
     
     auto_options = ["1) Manual", "2) Semi-Auto", "3) Full-Auto"]
@@ -98,25 +65,39 @@ with st.sidebar:
     automation_level = auto_label.split(") ")[1]
     auto_level_idx = auto_options.index(auto_label) + 1
 
-    # 3. 사이드바 최하단 마스터 데이터 버튼 (기존 유지)
+    # Master Data Buttons
     st.markdown("<br><br>", unsafe_allow_html=True)
     st.divider()
     st.subheader("🗂️ Master Data View")
-    
-    if 'db_view' not in st.session_state:
-        st.session_state.db_view = None
-
+    if 'db_view' not in st.session_state: st.session_state.db_view = None
     c1, c2 = st.columns(2)
     if c1.button("🌾 Crop", use_container_width=True): st.session_state.db_view = "작물"
     if c2.button("📅 Process", use_container_width=True): st.session_state.db_view = "공정"
     if st.button("🚜 Equipment", use_container_width=True): st.session_state.db_view = "장비"
-    if st.session_state.db_view and st.button("❌ Close", use_container_width=True):
-        st.session_state.db_view = None
+    if st.session_state.db_view and st.button("❌ Close", use_container_width=True): st.session_state.db_view = None
 
-# --- 탭 구성 ---
-tab1, tab2, tab3, tab4 = st.tabs(["📊 수익성 분석", "📅 작업 스케줄", "🚜 투입 장비", "🗂️ 마스터 데이터"])
+# --- 5. 데이터 계산 (사이드바 변수 이후에 위치) ---
+crop_info = df_crop[df_crop['Crop_Name'] == selected_crop].iloc[0]
+display_process_df = df_process[df_process['Crop_Name'] == selected_crop]
+if display_process_df.empty:
+    rep_crop = {"Greenhouse": "Strawberry", "Orchard": "Apple", "Paddy": "Rice"}.get(crop_info['Category_Type'], "Potato")
+    display_process_df = df_process[df_process['Crop_Name'] == rep_crop]
 
-# --- Tab 1: 수익성 분석 ---
+# --- 6. 메인 화면 상단 ---
+h1, h2 = st.columns([1, 8])
+h1.markdown("<h1 style='font-size: 60px; margin: 0;'>🚜</h1>", unsafe_allow_html=True)
+h2.title("Farm Automation Simulator")
+h2.markdown(f"<p style='margin-top:-15px;'>by <b>Jinux</b></p>", unsafe_allow_html=True)
+
+if st.session_state.db_view:
+    with st.expander(f"🔍 {st.session_state.db_view} Master Data", expanded=True):
+        if st.session_state.db_view == "작물": st.dataframe(df_crop)
+        elif st.session_state.db_view == "공정": st.dataframe(df_process)
+        elif st.session_state.db_view == "장비": st.dataframe(df_equip)
+
+# --- 7. 탭 구성 ---
+tab1, tab2, tab3 = st.tabs(["📊 수익성 분석", "📅 작업 스케줄", "🚜 투입 장비"])
+
 with tab1:
     total_yield = size_sqm * crop_info['Yield_Per_sqm_kg']
     total_rev = total_yield * crop_info['Avg_Price_Per_kg_USD']
@@ -124,151 +105,43 @@ with tab1:
     comp_data = []
     for i, label in enumerate(["Manual", "Semi-Auto", "Full-Auto"]):
         num = i + 1
-        mh_col, eq_col = f'Auto_{num}_ManHour_per_sqm', f'Auto_{num}_Equipment'
-        mh_val = display_process_df[mh_col].sum() * size_sqm if mh_col in display_process_df.columns else 0
-        eq_list = display_process_df[eq_col].dropna().unique().tolist() if eq_col in display_process_df.columns else []
+        mh_val = display_process_df[f'Auto_{num}_ManHour_per_sqm'].sum() * size_sqm
+        eq_list = display_process_df[f'Auto_{num}_Equipment'].dropna().unique().tolist()
         capex = df_equip[df_equip['Item_Name'].isin(eq_list)]['Unit_Price_USD'].sum()
-        comp_data.append({"Level": label, "MH": mh_val, "CAPEX": capex, "EQ": eq_list})
+        comp_data.append({"Level": label, "MH": mh_val, "CAPEX": capex})
     df_comp = pd.DataFrame(comp_data)
 
-    st.markdown(f"### 📊 {selected_crop} 분석 리포트")
     m1, m2, m3 = st.columns(3)
     m1.metric("🌾 예상 수확량", f"{total_yield:,.1f} kg")
     m2.metric("💰 예상 매출액", f"$ {total_rev:,.0f}")
     m3.metric("📍 설정 면적", f"{size_sqm:,.0f} sqm")
-    
-    st.markdown("---")
-    
-    # 좌우 기둥 레이아웃 설정
+
     l_col, r_col = st.columns([1, 1])
-    
-    # --- 왼쪽 기둥 (그래프) ---
     with l_col:
-        st.write("#### 📈 효율성 비교 차트")
-        # 중앙 상단 커스텀 범례
-        st.markdown("""
-            <div style="display: flex; justify-content: center; gap: 15px; margin-bottom: 10px;">
-                <div style="display: flex; align-items: center;"><div style="width: 15px; height: 10px; background-color: #D3D3D3; margin-right: 5px;"></div><span style="font-size: 0.8em; font-weight:bold;">Labor Hrs</span></div>
-                <div style="display: flex; align-items: center;"><div style="width: 15px; height: 3px; background-color: #e74c3c; margin-right: 5px;"></div><span style="font-size: 0.8em; font-weight:bold;">CAPEX</span></div>
-                <div style="display: flex; align-items: center;"><div style="width: 10px; height: 10px; background-color: #FFD700; margin-right: 5px;"></div><span style="font-size: 0.8em; font-weight:bold;">Selected</span></div>
-            </div>
-        """, unsafe_allow_html=True)
-
+        st.markdown('<div style="display:flex; justify-content:center; gap:15px; font-size:0.8em; font-weight:bold;"><span style="color:#D3D3D3;">■ Labor</span> <span style="color:#e74c3c;">— CAPEX</span> <span style="color:#FFD700;">■ Selected</span></div>', unsafe_allow_html=True)
         fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=df_comp['Level'], 
-            y=df_comp['MH'], 
-            marker_color=['#FFD700' if l == automation_level else '#D3D3D3' for l in df_comp['Level']], 
-            yaxis='y1'
-        ))
-        fig.add_trace(go.Scatter(
-            x=df_comp['Level'], 
-            y=df_comp['CAPEX'], 
-            line=dict(color='#e74c3c', width=3), 
-            mode='lines+markers', 
-            yaxis='y2'
-        ))
-        fig.update_layout(
-            height=400, showlegend=False, margin=dict(l=0,r=0,t=10,b=0),
-            yaxis=dict(title="Man-Hours"),
-            yaxis2=dict(title="CAPEX ($)", overlaying="y", side="right", showgrid=False)
-        )
+        fig.add_trace(go.Bar(x=df_comp['Level'], y=df_comp['MH'], marker_color=['#FFD700' if l == automation_level else '#D3D3D3' for l in df_comp['Level']], yaxis='y1'))
+        fig.add_trace(go.Scatter(x=df_comp['Level'], y=df_comp['CAPEX'], line=dict(color='#e74c3c', width=3), yaxis='y2'))
+        fig.update_layout(height=350, showlegend=False, margin=dict(l=0,r=0,t=10,b=0), yaxis2=dict(overlaying="y", side="right", showgrid=False))
         st.plotly_chart(fig, use_container_width=True)
-
-    # --- 오른쪽 기둥 (인사이트) ---
+    
     with r_col:
-        st.write("#### 📋 레벨별 요약 및 인사이트")
         for _, r in df_comp.iterrows():
             sel = (r['Level'] == automation_level)
-            st.markdown(f"""
-                <div style="border: 2px solid {'#FBC02D' if sel else '#DDD'}; padding: 10px; border-radius: 8px; margin-bottom: 6px; background-color: {'#FFF9C4' if sel else '#FFF'}; color: #000;">
-                    <div style="display: flex; justify-content: space-between;">
-                        <b>{r['Level']} {"⭐" if sel else ""}</b> 
-                        <span>⏱️ {r['MH']:,.1f}h | 💰 ${r['CAPEX']:,.0f}</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-        
-        if automation_level != "Manual":
-            current_row = df_comp[df_comp['Level'] == automation_level].iloc[0]
-            manual_row = df_comp.iloc[0]
-            reduction = (1 - current_row['MH'] / manual_row['MH']) * 100 if manual_row['MH'] > 0 else 0
-            extra = current_row['CAPEX'] - manual_row['CAPEX']
-            st.info(f"💡 **분석 결과:** {automation_level} 적용 시 수동 대비 노동 시간 **{reduction:.1f}% 절감**, 설비 투자비 **$ {extra:,.0f} 추가**가 예상됩니다.")
+            st.markdown(f"<div style='border:1px solid #ddd; padding:8px; border-radius:5px; margin-bottom:5px; background-color:{'#FFF9C4' if sel else '#FFF'}; color:#000;'><b>{r['Level']}</b>: {r['MH']:,.1f}h | ${r['CAPEX']:,.0f}</div>", unsafe_allow_html=True)
 
-# --- Tab 2: 작업 스케줄 ---
 with tab2:
-    st.subheader(f"📅 {selected_crop} 작업 프로세스 ({source_name})")
-    target_eq_col = f'Auto_{auto_level_idx}_Equipment'
-    avail_cols = [c for c in ['Process_Step', 'Work_Week_Start', 'Work_Week_End', target_eq_col] if c in display_process_df.columns]
-    st.dataframe(display_process_df[avail_cols], use_container_width=True, hide_index=True)
+    st.dataframe(display_process_df[['Process_Step', 'Work_Week_Start', f'Auto_{auto_level_idx}_Equipment']], use_container_width=True)
 
-# --- Tab 3: 투입 장비 ---
 with tab3:
-    st.subheader(f"🚜 {automation_level} 투입 장비 명세")
-    target_eq_col = f'Auto_{auto_level_idx}_Equipment'
-    if target_eq_col in display_process_df.columns:
-        used_eq = display_process_df[target_eq_col].dropna().unique()
-        matched = df_equip[df_equip['Item_Name'].isin(used_eq)]
-        if not matched.empty:
-            st.metric("총 장비 투자액", f"$ {matched['Unit_Price_USD'].sum():,.0f}")
-            st.dataframe(matched[['Item_Name', 'Category', 'Unit_Price_USD', 'Lifespan_Years']], use_container_width=True, hide_index=True)
-        else:
-            st.info("해당 레벨에 매칭된 상세 장비 정보가 없습니다.")
+    eq_names = display_process_df[f'Auto_{auto_level_idx}_Equipment'].dropna().unique()
+    st.dataframe(df_equip[df_equip['Item_Name'].isin(eq_names)], use_container_width=True)
 
-# --- Tab 4: 마스터 데이터 ---
-with tab4:
-    st.subheader("🗂️ 데이터베이스 조회")
-    
-    # 1. 버튼들을 좌측 정렬하기 위해 컬럼 배치 (작은 너비로 설정)
-    col1, col2, col3, _ = st.columns([1, 1, 1, 5]) # 마지막 빈 컬럼(_)이 나머지 공간을 차지하여 좌측 정렬됨
-    
-    # 2. 버튼 클릭 상태를 저장하기 위해 session_state 활용 (디폴트값: 작물)
-    if 'db_view' not in st.session_state:
-        st.session_state.db_view = "작물"
-
-    if col1.button("🌾 작물 데이터"):
-        st.session_state.db_view = "작물"
-    if col2.button("📅 공정 데이터"):
-        st.session_state.db_view = "공정"
-    if col3.button("🚜 장비 데이터"):
-        st.session_state.db_view = "장비"
-
-    st.markdown("---")
-
-    # 3. 선택된 데이터프레임 디스플레이
-    if st.session_state.db_view == "작물":
-        st.write("#### 🌾 Crop Master Data")
-        st.dataframe(df_crop, use_container_width=True, hide_index=True)
-        
-    elif st.session_state.db_view == "공정":
-        st.write("#### 📅 Process Standard Data")
-        st.dataframe(df_process, use_container_width=True, hide_index=True)
-        
-    elif st.session_state.db_view == "장비":
-        st.write("#### 🚜 Equipment & Facility Data")
-        st.dataframe(df_equip, use_container_width=True, hide_index=True)
-
-# --- 페이지 하단 푸터 (우측 정렬 & 한 줄 버전) ---
+# --- 8. 하단 푸터 (한 줄 우측 정렬) ---
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.divider()
-
-current_date = datetime.now().strftime("%Y-%m-%d")
-
-# HTML/CSS를 사용하여 한 줄로 우측 정렬
 st.markdown(f"""
-    <div style="text-align: right; color: #7f8c8d; font-size: 0.85em; letter-spacing: -0.5px;">
-        <b>Copyright 2024. Jinux. All rights reserved.</b> 
-        <span style="margin: 0 10px;">|</span> Designed for AgriTech Efficiency Analysis 
-        <span style="margin: 0 10px;">|</span> 📅 최신 업데이트: {current_date} 
-        <span style="margin: 0 10px;">|</span> 📧 Contact: <a href="mailto:JinuxDreams@gmail.com" style="color: #7f8c8d; text-decoration: none; font-weight: bold;">JinuxDreams@gmail.com</a>
+    <div style="text-align: right; color: #7f8c8d; font-size: 0.8em;">
+        <b>Copyright 2024. Jinux. All rights reserved.</b> | Designed for AgriTech Efficiency Analysis | 📅 최신 업데이트: {datetime.now().strftime("%Y-%m-%d")} | 📧 Contact: <a href="mailto:JinuxDreams@gmail.com" style="color:#7f8c8d; text-decoration:none;">JinuxDreams@gmail.com</a>
     </div>
 """, unsafe_allow_html=True)
-
-# 하단 공백 제거를 위한 스타일링
-st.markdown("""
-    <style>
-    footer {visibility: hidden;}
-    [data-testid="stVerticalBlock"] {gap: 0rem;}
-    </style>
-    """, unsafe_allow_html=True)
