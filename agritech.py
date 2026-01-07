@@ -128,12 +128,36 @@ with tab1:
     df_comp = pd.DataFrame(comp_data)
     
 with tab2:
-    st.dataframe(display_process_df[['Process_Step', 'Work_Week_Start', f'Auto_{auto_level_idx}_Equipment']], use_container_width=True)
+    st.subheader(f"📅 {selected_crop} 작업 프로세스 ({source_name})")
+    
+    # [수정] 존재하는 컬럼만 골라내어 에러 방지
+    target_eq_col = f'Auto_{auto_level_idx}_Equipment'
+    base_cols = ['Process_Step', 'Work_Week_Start', 'Work_Week_End']
+    
+    # 시트에 실제로 존재하는 컬럼 리스트만 추출
+    available_cols = [col for col in base_cols + [target_eq_col] if col in display_process_df.columns]
+    
+    if available_cols:
+        st.dataframe(display_process_df[available_cols], use_container_width=True, hide_index=True)
+    else:
+        st.warning("⚠️ 시트에 공정 관련 컬럼(Process_Step 등)이 존재하지 않습니다. 컬럼명을 확인해주세요.")
 
 with tab3:
-    eq_names = display_process_df[f'Auto_{auto_level_idx}_Equipment'].dropna().unique()
-    st.dataframe(df_equip[df_equip['Item_Name'].isin(eq_names)], use_container_width=True)
-
+    st.subheader(f"🚜 {automation_level} 투입 장비 명세")
+    
+    # [수정] 장비 컬럼 존재 여부 체크
+    target_eq_col = f'Auto_{auto_level_idx}_Equipment'
+    
+    if target_eq_col in display_process_df.columns:
+        eq_names = display_process_df[target_eq_col].dropna().unique()
+        matched_equip = df_equip[df_equip['Item_Name'].isin(eq_names)]
+        
+        if not matched_equip.empty:
+            st.dataframe(matched_equip, use_container_width=True, hide_index=True)
+        else:
+            st.info(f"💡 {automation_level} 레벨에 등록된 상세 장비 정보가 없습니다.")
+    else:
+        st.error(f"❌ 시트에 '{target_eq_col}' 컬럼이 없습니다.")
 # --- 8. 하단 푸터 (한 줄 우측 정렬) ---
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.divider()
