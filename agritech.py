@@ -63,11 +63,19 @@ REPRESENTATIVE_CROP = {"Greenhouse": "Strawberry", "Orchard": "Apple", "Paddy": 
 
 # --- 사이드바 설정 ---
 with st.sidebar:
+    # [추가] 사이드바 최상단 공지 문구
+    st.info("💡 Please select country, crop name, size and automation level")
+    
     st.header("📍 농업 설정")
-    selected_country = st.selectbox("1) 국가 선택", df_crop['Country'].unique())
+    # ... (기존 국가/작물/면적/자동화 레벨 선택 코드) ...
+    available_countries = df_crop['Country'].unique() if 'Country' in df_crop.columns else []
+    selected_country = st.selectbox("1) 국가 선택", available_countries)
+    
     country_crops = df_crop[df_crop['Country'] == selected_country]
     selected_crop = st.selectbox("2) 작물 선택", country_crops['Crop_Name'].unique())
+    
     size_sqm = st.number_input("3) 농지 면적 (sqm)", min_value=10, value=1000, step=100)
+    
     auto_options = ["1) Manual", "2) Semi-Auto", "3) Full-Auto"]
     auto_label = st.radio("4) 자동화 수준", auto_options)
     automation_level = auto_label.split(") ")[1]
@@ -220,26 +228,19 @@ with tab4:
         st.write("#### 🚜 Equipment & Facility Data")
         st.dataframe(df_equip, use_container_width=True, hide_index=True)
 
-# --- [추가] 페이지 하단 푸터 (Footer) ---
+# --- [수정] 페이지 하단 푸터 (우측 정렬 버전) ---
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.divider()
-f_col1, f_col2, f_col3 = st.columns([2, 2, 1])
 
-with f_col1:
-    st.markdown(f"**Copyright 2024. Jinux. All rights reserved.**")
-    st.caption("Designed for AgriTech Efficiency Analysis")
+# 우측 정렬을 위해 왼쪽 컬럼을 비우고 오른쪽 컬럼에 내용을 배치
+f_empty, f_content = st.columns([1, 2])
 
-with f_col2:
+with f_content:
     current_date = datetime.now().strftime("%Y-%m-%d")
-    st.markdown(f"📅 **최신 업데이트:** {current_date}")
-
-with f_col3:
-    st.markdown(f"📧 **Contact:** [JinuxDreams@gmail.com](mailto:JinuxDreams@gmail.com)")
-
-# CSS를 활용한 하단 텍스트 중앙 정렬 스타일링 (선택사항)
-st.markdown("""
-    <style>
-    footer {visibility: hidden;}
-    .reportview-container .main .footer {color: #888;}
-    </style>
+    st.markdown(f"""
+        <div style="text-align: right; color: #7f8c8d; line-height: 1.6;">
+            <p style="margin: 0; font-weight: bold;">Copyright 2024. Jinux. All rights reserved.</p>
+            <p style="margin: 0; font-size: 0.9em;">Designed for AgriTech Efficiency Analysis</p>
+            <p style="margin: 0; font-size: 0.9em;">📅 최신 업데이트: {current_date} | 📧 Contact: <a href="mailto:JinuxDreams@gmail.com" style="color: #7f8c8d; text-decoration: none;">JinuxDreams@gmail.com</a></p>
+        </div>
     """, unsafe_allow_html=True)
