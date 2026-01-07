@@ -61,48 +61,91 @@ crop_schedule = df_process[df_process['Crop_Name'] == selected_crop]
 
 # --- Tab 1: 수익성 분석 ---
 with tab1:
+    import plotly.graph_objects as go
+
     st.header(f"📊 {selected_crop} 자동화 레벨별 비교 분석")
-    comparison_data = []
     
-    if not crop_schedule.empty:
-        for level in [1, 2, 3]:
-            label = ["Manual", "Semi-Auto", "Full-Auto"][level-1]
-            mh_col, eq_col = f'Auto_{level}_ManHour_per_sqm', f'Auto_{level}_Equipment'
-            
+    comparison_data = []
+    # 해당 작물의 공정 데이터 필터링
+    crop_schedule = df_process[df_process['Crop_Name'] == selected_crop]
+    
+    # 1. 레벨별 데이터 계산 루프
+    levels = ["Manual", "Semi-Auto", "Full-Auto"]
+    for i, label in enumerate(levels):
+        level_num = i + 1
+        mh_col = f'Auto_{level_num}_ManHour_per_sqm'
+        eq_col = f'Auto_{level_num}_Equipment'
+        
+        # [노동시간] 데이터가 없거나 에러가 나면 0으로 처리
+        try:
             total_mh = crop_schedule[mh_col].sum() * size_sqm if mh_col in crop_schedule.columns else 0
+        except:
+            total_mh = 0
             
-            total_capex = 0
-            if eq_col in crop_schedule.columns:
-                used_equips = crop_schedule[eq_col].dropna().unique()
-                if level == 1 and len(used_equips) == 0: used_equips = ['Hand Tool Kit']
-                
+        # [투자비] 데이터 계산
+        total_capex = 0
+        used_equips = []
+        if eq_col in crop_schedule.columns:
+            used_equips = crop_schedule[eq_col].dropna().unique().tolist()
+            
+            # Manual 단계에서 장비가 비어있으면 기본값 적용
+            if level_num == 1 and not used_equips:
+                used_equips = ['Hand Tool Kit']
+            
+            if not df_equip.empty:
                 prices = pd.to_numeric(df_equip[df_equip['Item_Name'].isin(used_equips)]['Unit_Price_USD'], errors='coerce')
                 total_capex = prices.sum()
-            
-            comparison_data.append({"Level": label, "Total_ManHour": total_mh, "Total_CAPEX": total_capex})
-
-        df_compare = pd.DataFrame(comparison_data)
-
-        # 그래프
-        fig = go.Figure()
-        fig.add_trace(go.Bar(x=df_compare['Level'], y=df_compare['Total_ManHour'], name='Man-Hours', marker_color='#5dade2', yaxis='y1'))
-        fig.add_trace(go.Scatter(x=df_compare['Level'], y=df_compare['Total_CAPEX'], name='Investment ($)', line=dict(color='#e74c3c', width=4), yaxis='y2'))
-        fig.update_layout(yaxis=dict(title="Man-Hours"), yaxis2=dict(title="Investment ($)", overlaying="y", side="right"), legend=dict(orientation="h", y=1.1))
-        st.plotly_chart(fig, use_container_width=True)
-
-        # 상세 표
-        st.subheader(f"📋 상세 분석 ({automation_level})")
-        idx = ["Manual", "Semi-Auto", "Full-Auto"].index(automation_level)
-        current_data = df_compare.iloc[idx]
-        current_equips = crop_schedule[f'Auto_{idx+1}_Equipment'].dropna().unique().tolist()
         
-        st.table(pd.DataFrame({
-            "항목": ["자동화 수준", "총 노동 시간", "총 설비투자비", "주요 장비"],
-            "값": [automation_level, f"{current_data['Total_ManHour']:,.1f} hr", f"$ {current_data['Total_CAPEX']:,.0f}", ", ".join(current_equips)]
-        }))
-    else:
-        st.info("데이터가 없습니다.")
+        comparison_data.append({
+            "Level": label,
+            "Total_ManHour": total_mh,
+            "Total_CAPEX": total_capex,
+            "Equipment": ", ".join(used_equips) if used_equips else "N/A"
+        })
 
+    df_compare = pd.DataFrame(comparison_data)
+
+    # 2. 그래프 시각화 (기존 유지)
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=df_compare['Level'], y=df_compare['Total_ManHour'], name='Man-Hours', marker_color='#5dade2', yaxis='y1'))
+    fig.add_trace(go.Scatter(x=df_compare['Level'], y=df_compare['Total_CAPEX'], name='Investment ($)', line=dict(color='#e74c3c', width=4), yaxis='y2'))
+    fig.update_layout(
+        yaxis=dict(title="Man-Hours"), 
+        yaxis2=dict(title="Investment ($)", overlaying="y", side="right", showgrid=False),
+        legend=dict(orientation="h", y=1.1),
+        margin=dict(l=0, r=0, t=30, b=0)
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # 3. 통합 상세 분석 표 (하이라이트 적용)
+    st.markdown("---")
+    st.subheader(f"📋 전 레벨 통합 비교 리포트")
+    st.caption(f"💡 왼쪽 사이드바에서 선택하신 **{automation_level}** 행이 강조 표시됩니다.")
+
+    # 하이라이트를 위한 스타일 함수 정의
+    def highlight_row(row):
+        # 사이드바에서 선택한 automation_level과 일치하면 배경색 변경
+        if row['Level'] == automation_level:
+            return ['background-color: #fff4e6; font-weight: bold; border: 2px solid #ff922b'] * len(row)
+        return [''] * len(row)
+
+    # 표 출력용 데이터프레임 가공
+    df_display = df_compare.copy()
+    df_display.columns = ["자동화 수준", "총 노동 시간(hr)", "총 투자비(USD)", "투입 장비"]
+    
+    # 숫자 포맷팅 및 스타일 적용
+    st.table(df_display.style.apply(highlight_row, axis=1).format({
+        "총 노동 시간(hr)": "{:,.1f}",
+        "총 투자비(USD)": "$ {:,.0f}"
+    }))
+
+    # 4. 동적 인사이트 (선택된 레벨 기준)
+    selected_data = df_compare[df_compare['Level'] == automation_level].iloc[0]
+    if automation_level != "Manual":
+        manual_mh = df_compare.iloc[0]['Total_ManHour']
+        if manual_mh > 0:
+            save_rate = (1 - selected_data['Total_ManHour'] / manual_mh) * 100
+            st.info(f"✨ **{automation_level}** 선택 시, 수동 작업 대비 노동력을 **{save_rate:.1f}%** 절감할 수 있습니다.")
 # --- Tab 2: 작업 스케줄 ---
 with tab2:
     st.subheader(f"📅 {selected_crop} ({automation_level}) 스케줄")
