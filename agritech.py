@@ -63,9 +63,29 @@ crop_schedule = df_process[df_process['Crop_Name'] == selected_crop]
 with tab1:
     import plotly.graph_objects as go
 
-    st.header(f"📊 {selected_crop} 자동화 레벨별 비교 분석")
+    # 0. 작물 마스터 데이터 기반 기본 수익 지표 계산
+    # df_crop에서 선택된 작물의 데이터 추출
+    crop_info = df_crop[df_crop['Crop_Name'] == selected_crop].iloc[0]
     
-    # 1. 데이터 계산부
+    # 계산 로직: 면적 * 단위 수확량 / 면적 * 단위 수확량 * 판매 단가
+    total_yield_kg = size_sqm * crop_info['Yield_Per_sqm_kg']
+    total_revenue_usd = total_yield_kg * crop_info['Avg_Price_Per_kg_USD']
+
+    st.header(f"📊 {selected_crop} 생산 및 수익성 분석")
+    
+    # 상단 요약 지표 (수확량, 매출) - 한 줄로 표시
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.metric("🌾 예상 연간 수확량", f"{total_yield_kg:,.1f} kg", help="면적 * 단위 면적당 수확량")
+    with m2:
+        st.metric("💰 예상 연간 매출액", f"$ {total_revenue_usd:,.0f}", help="총 수확량 * 평균 판매 단가")
+    with m3:
+        st.metric("📍 설정 면적", f"{size_sqm:,.0f} sqm")
+
+    st.markdown("---")
+    st.subheader("📈 자동화 레벨별 효율성 비교")
+
+    # 1. 데이터 계산부 (기존 로직 유지)
     comparison_data = []
     crop_schedule = df_process[df_process['Crop_Name'] == selected_crop]
     levels = ["Manual", "Semi-Auto", "Full-Auto"]
@@ -94,76 +114,34 @@ with tab1:
 
     df_compare = pd.DataFrame(comparison_data)
 
-    # 2. 그래프 시각화 (ValueError 방지를 위해 설정 최적화)
+    # 2. 그래프 시각화
     fig = go.Figure()
+    fig.add_trace(go.Bar(x=df_compare['Level'], y=df_compare['Total_ManHour'], name='Man-Hours', marker_color='#5dade2', yaxis='y1'))
+    fig.add_trace(go.Scatter(x=df_compare['Level'], y=df_compare['Total_CAPEX'], name='Investment ($)', line=dict(color='#e74c3c', width=4), yaxis='y2'))
     
-    # 노동 시간 바 차트
-    fig.add_trace(go.Bar(
-        x=df_compare['Level'], 
-        y=df_compare['Total_ManHour'], 
-        name='Man-Hours', 
-        marker_color='#5dade2', 
-        yaxis='y1'
-    ))
-    
-    # 투자비 라인 차트
-    fig.add_trace(go.Scatter(
-        x=df_compare['Level'], 
-        y=df_compare['Total_CAPEX'], 
-        name='Investment ($)', 
-        line=dict(color='#e74c3c', width=4), 
-        yaxis='y2'
-    ))
-
-    # 레이아웃 설정 (ValueError 해결을 위해 폰트 설정 구조 단순화)
     fig.update_layout(
-        xaxis=dict(title="Automation Level"),
-        yaxis=dict(
-            title="Man-Hours", 
-            side="left", 
-            title_font=dict(color="#5dade2"), 
-            tickfont=dict(color="#5dade2")
-        ), 
-        yaxis2=dict(
-            title="Investment ($)", 
-            overlaying="y", 
-            side="right", 
-            showgrid=False, 
-            title_font=dict(color="#e74c3c"), 
-            tickfont=dict(color="#e74c3c")
-        ),
+        yaxis=dict(title="Man-Hours", side="left", title_font=dict(color="#5dade2"), tickfont=dict(color="#5dade2")), 
+        yaxis2=dict(title="Investment ($)", overlaying="y", side="right", showgrid=False, title_font=dict(color="#e74c3c"), tickfont=dict(color="#e74c3c")),
         legend=dict(orientation="h", x=0.5, xanchor="center", y=1.15),
-        margin=dict(l=50, r=50, t=50, b=50),
-        hovermode="x unified"
+        margin=dict(l=50, r=50, t=50, b=50)
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    # 3. 상세 분석 카드 레이아웃 (검정 글씨 가독성 극대화)
+    # 3. 상세 분석 카드 레이아웃 (좌우 디스플레이)
     st.markdown("---")
     st.subheader("📋 자동화 수준별 상세 비교")
     
     cols = st.columns(3)
-    
     for i, label in enumerate(levels):
         data = df_compare.iloc[i]
         is_selected = (label == automation_level)
-        
-        # 가독성을 위해 선택 시 연한 회색 배경(#F8F9FA)과 파란색 강조 테두리 사용
         bg_color = "#F0F7FF" if is_selected else "#FFFFFF"
         border_color = "#2E86C1" if is_selected else "#D5D8DC"
         box_shadow = "4px 4px 15px rgba(0,0,0,0.1)" if is_selected else "none"
         
         with cols[i]:
             st.markdown(f"""
-                <div style="
-                    background-color: {bg_color}; 
-                    border: 2px solid {border_color}; 
-                    padding: 20px; 
-                    border-radius: 15px;
-                    min-height: 280px;
-                    box-shadow: {box_shadow};
-                    color: #000000;
-                ">
+                <div style="background-color: {bg_color}; border: 2px solid {border_color}; padding: 20px; border-radius: 15px; min-height: 280px; box-shadow: {box_shadow}; color: #000000;">
                     <h3 style="margin-top:0; color:#000000; font-weight: 900; border-bottom: 2px solid {border_color}; padding-bottom: 10px; display: flex; justify-content: space-between;">
                         <span>{label}</span>
                         <span>{"✅" if is_selected else ""}</span>
@@ -180,8 +158,7 @@ with tab1:
                     </div>
                     <div style="background: rgba(0,0,0,0.03); padding: 10px; border-radius: 8px; border-left: 4px solid {border_color};">
                         <p style="font-size: 0.85em; color: #000000; margin: 0; line-height: 1.4;">
-                            <b>🚜 투입 장비:</b><br>
-                            {data['Equipment']}
+                            <b>🚜 투입 장비:</b><br>{data['Equipment']}
                         </p>
                     </div>
                 </div>
