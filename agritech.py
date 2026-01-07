@@ -63,34 +63,55 @@ REPRESENTATIVE_CROP = {"Greenhouse": "Strawberry", "Orchard": "Apple", "Paddy": 
 
 # --- 사이드바 설정 ---
 with st.sidebar:
-    # [추가] 사이드바 최상단 공지 문구
-    st.info("💡 Please select country, crop name, size and automation level")
+    # 1. 최상단 강조 공지 (깜빡이는 애니메이션 효과)
+    st.markdown("""
+        <div style="text-align: center; background-color: #f0f2f6; padding: 15px; border-radius: 10px; border: 1px solid #3498db;">
+            <p style="font-size: 1.1em; font-weight: bold; color: #2c3e50; margin-bottom: 5px;">
+                Please select below
+            </p>
+            <p style="font-size: 28px; animation: blink 1s linear infinite; color: #3498db; margin: 0;">
+                ⬇️
+            </p>
+        </div>
+        <style>
+            @keyframes blink {
+                0% { opacity: 1; }
+                50% { opacity: 0.1; }
+                100% { opacity: 1; }
+            }
+        </style>
+    """, unsafe_allow_html=True)
     
-    st.header("📍 농업 설정")
-    # ... (기존 국가/작물/면적/자동화 레벨 선택 코드) ...
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 2. 선택 항목 (영문 명칭으로 변경)
     available_countries = df_crop['Country'].unique() if 'Country' in df_crop.columns else []
-    selected_country = st.selectbox("1) 국가 선택", available_countries)
+    selected_country = st.selectbox("Country (국가)", available_countries)
     
     country_crops = df_crop[df_crop['Country'] == selected_country]
-    selected_crop = st.selectbox("2) 작물 선택", country_crops['Crop_Name'].unique())
+    selected_crop = st.selectbox("Crop (작물)", country_crops['Crop_Name'].unique())
     
-    size_sqm = st.number_input("3) 농지 면적 (sqm)", min_value=10, value=1000, step=100)
+    size_sqm = st.number_input("Farm Size (농지 규모, sqm)", min_value=10, value=1000, step=100)
     
     auto_options = ["1) Manual", "2) Semi-Auto", "3) Full-Auto"]
-    auto_label = st.radio("4) 자동화 수준", auto_options)
+    auto_label = st.radio("Auto Level (자동화 수준)", auto_options)
     automation_level = auto_label.split(") ")[1]
     auto_level_idx = auto_options.index(auto_label) + 1
 
-# --- 데이터 Fallback 로직 ---
-crop_info = df_crop[df_crop['Crop_Name'] == selected_crop].iloc[0]
-cat_type = crop_info.get('Category_Type', 'Upland')
-display_process_df = df_process[df_process['Crop_Name'] == selected_crop]
-source_name = selected_crop
+    # 3. 사이드바 최하단 마스터 데이터 버튼 (기존 유지)
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    st.divider()
+    st.subheader("🗂️ Master Data View")
+    
+    if 'db_view' not in st.session_state:
+        st.session_state.db_view = None
 
-if display_process_df.empty:
-    rep_crop = REPRESENTATIVE_CROP.get(cat_type, "Potato")
-    display_process_df = df_process[df_process['Crop_Name'] == rep_crop]
-    source_name = f"{rep_crop} (대표)"
+    c1, c2 = st.columns(2)
+    if c1.button("🌾 Crop", use_container_width=True): st.session_state.db_view = "작물"
+    if c2.button("📅 Process", use_container_width=True): st.session_state.db_view = "공정"
+    if st.button("🚜 Equipment", use_container_width=True): st.session_state.db_view = "장비"
+    if st.session_state.db_view and st.button("❌ Close", use_container_width=True):
+        st.session_state.db_view = None
 
 # --- 탭 구성 ---
 tab1, tab2, tab3, tab4 = st.tabs(["📊 수익성 분석", "📅 작업 스케줄", "🚜 투입 장비", "🗂️ 마스터 데이터"])
